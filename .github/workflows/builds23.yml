@@ -1,23 +1,18 @@
 name: Build EquinoXROM
-
 on:
   workflow_dispatch:
-
 jobs:
   build:
     runs-on: ubuntu-24.04
-
     strategy:
       fail-fast: false
       matrix:
         target: [r9q ,r9q2]
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           submodules: 'recursive'
-
       - name: Free up space
         run: |
           sudo apt-get remove -y '^aspnetcore-.*' || echo "::warning::The command [sudo apt-get remove -y '^aspnetcore-.*'] failed to complete successfully. Proceeding..."
@@ -30,17 +25,14 @@ jobs:
           sudo apt-get remove -y google-cloud-cli --fix-missing || echo "::debug::The command [sudo apt-get remove -y google-cloud-cli --fix-missing] failed to complete successfully. Proceeding..."
           sudo apt-get autoremove -y || echo "::warning::The command [sudo apt-get autoremove -y] failed to complete successfully. Proceeding..."
           sudo apt-get clean || echo "::warning::The command [sudo apt-get clean] failed to complete successfully. Proceeding..."
-
       - name: Free disk space (2/3)
         uses: jlumbroso/free-disk-space@main
         with:
           tool-cache: true
-
       - name: Free disk space (3/3)
         uses: rokibhasansagar/slimhub_actions@main
         with:
           retain: 'compiler_cmake'
-
       - name: Set up build environment
         run: |
           sudo apt update
@@ -52,62 +44,45 @@ jobs:
           sudo modprobe erofs f2fs
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
       - name: Set up JDK 11
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '11'
           cache: 'gradle'
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 'latest'
-
       - name: Build dependencies
         run: source ./buildenv.sh ${{ matrix.target }}
-
       - name: Download source firmware
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           TARGET_FIRMWARE="$SOURCE_FIRMWARE" ./scripts/download_fw.sh --force
-
       - name: Extract source firmware
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           TARGET_FIRMWARE="$SOURCE_FIRMWARE" ./scripts/extract_fw.sh --force
-
       - name: Download target firmware
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           SOURCE_FIRMWARE="$TARGET_FIRMWARE" ./scripts/download_fw.sh --force
-
       - name: Extract target firmware
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           SOURCE_FIRMWARE="$TARGET_FIRMWARE" ./scripts/extract_fw.sh --force
-
       - name: Cleanup out/odin and leave placeholder
         run: |
           rm -rf out/odin/SM-S938B_EUX
           mkdir -p out/odin/SM-S938B_EUX
           touch out/odin/SM-S938B_EUX/.downloaded
-
       - name: Build ROM
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           ./scripts/make_rom.sh --force
-
-      - name: Upload to GoFile
-        run: |
-          ZIP_FILE=$(find out -maxdepth 1 -type f -name "*.zip" | head -n 1)
-          RESPONSE=$(curl -s -F "file=@$ZIP_FILE" -F "token=${{ secrets.GOFILE_TOKEN }}" -F "folderId=${{ secrets.GOFILE_FOLDER_ID }}" "https://upload-eu-par.gofile.io/uploadFile")
-          echo "Download link:"
-          echo "$RESPONSE" | jq -r '.data.downloadPage'
-
-          echo "MD5:"
-          md5sum "$ZIP_FILE"
-
-          echo "SHA256:"
-          sha256sum "$ZIP_FILE"
+      - name: Upload ROM as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: EquinoX-ROM-${{ matrix.target }}
+          path: out/target/product/${{ matrix.target }}/*.zip
