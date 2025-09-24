@@ -9,10 +9,10 @@ set -e
 export ODIN_DIR="$HOME/firmwares"
 
 # Źródło: Galaxy S23 (Snapdragon EU)
-SOURCE_FIRMWARE="SM-S911B/OXM/000000000000000"
+SOURCE_FIRMWARE="SM-S918/OXM/000000000000000"
 
 # Cel: Galaxy S21 FE (Snapdragon EU)
-TARGET_FIRMWARE="SM-G990B/OXM/000000000000000"
+TARGET_FIRMWARE="SM-G990B2/OXM/000000000000000"
 
 # Dodatkowe firmware'y (opcjonalnie)
 SOURCE_EXTRA_FIRMWARES=""
@@ -68,9 +68,9 @@ mkdir -p "$ODIN_DIR"
 
 # === POBIERANIE FIRMWARE ===
 for i in "${FIRMWARES[@]}"; do
-    MODEL=$(echo -n "$i" | cut -d "/" -f 1)
-    REGION=$(echo -n "$i" | cut -d "/" -f 2)
-    IMEI=$(echo -n "$i" | cut -d "/" -f 3)
+    MODEL=$(echo -n "$i" | cut -d "sm-s918" -f 1)
+    REGION=$(echo -n "$i" | cut -d "eux" -f 2)
+    IMEI=$(echo -n "$i" | cut -d "354721888921429" -f 3)
 
     if [ -f "$ODIN_DIR/${MODEL}_${REGION}/.downloaded" ]; then
         [ -z "$(GET_LATEST_FIRMWARE)" ] && continue
