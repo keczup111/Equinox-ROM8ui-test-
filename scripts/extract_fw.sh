@@ -19,7 +19,17 @@
 # shellcheck disable=SC2162
 
 set -e
-chmod +x $SRC_DIR/scripts/make_rom.sh
+
+# --- ADDED ---
+# Definition of the directory for extracted files. Change the path if needed.
+export FW_DIR="$HOME/extracted_firmwares"
+# Ensure the ODIN_DIR variable is set. If download_fw.sh was run before, it should already be exported.
+# If not, uncomment and set the path:
+# export ODIN_DIR="$HOME/firmwares"
+# ------------------
+
+# Ensure the following utilities are installed:
+# curl, xxd, lz4, simg2img, lpunpack, lpdump, fuse.erofs
 
 # [
 GET_LATEST_FIRMWARE()
@@ -235,15 +245,23 @@ EXTRACT_ALL()
     echo ""
 }
 
+# These variables must be set in the environment.
+# The download_fw.sh script exports them, so everything will work if run sequentially.
+# SOURCE_FIRMWARE="SM-S918B/EUX/000000000000000"
+# TARGET_FIRMWARE="SM-G990B2/EUX/000000000000000"
+# SOURCE_EXTRA_FIRMWARES=""
+# TARGET_EXTRA_FIRMWARES=""
+
+
 FIRMWARES=( "$SOURCE_FIRMWARE" "$TARGET_FIRMWARE" )
-IFS=':' read -a SOURCE_EXTRA_FIRMWARES <<< "$SOURCE_EXTRA_FIRMWARES"
+IFS=':' read -ra SOURCE_EXTRA_FIRMWARES <<< "$SOURCE_EXTRA_FIRMWARES"
 if [ "${#SOURCE_EXTRA_FIRMWARES[@]}" -ge 1 ]; then
     for i in "${SOURCE_EXTRA_FIRMWARES[@]}"
     do
         FIRMWARES+=( "$i" )
     done
 fi
-IFS=':' read -a TARGET_EXTRA_FIRMWARES <<< "$TARGET_EXTRA_FIRMWARES"
+IFS=':' read -ra TARGET_EXTRA_FIRMWARES <<< "$TARGET_EXTRA_FIRMWARES"
 if [ "${#TARGET_EXTRA_FIRMWARES[@]}" -ge 1 ]; then
     for i in "${TARGET_EXTRA_FIRMWARES[@]}"
     do
@@ -277,7 +295,8 @@ do
     REGION=$(echo -n "$i" | cut -d "/" -f 2)
 
     if [ -f "$FW_DIR/${MODEL}_${REGION}/.extracted" ]; then
-        [ -z "$(GET_LATEST_FIRMWARE)" ] && continue
+        LATEST_VERSION=$(GET_LATEST_FIRMWARE)
+        [ -z "$LATEST_VERSION" ] && continue
         if [ -f "$ODIN_DIR/${MODEL}_${REGION}/.downloaded" ] && \
             [[ "$(cat "$ODIN_DIR/${MODEL}_${REGION}/.downloaded")" != "$(cat "$FW_DIR/${MODEL}_${REGION}/.extracted")" ]]; then
             if $FORCE; then
@@ -289,7 +308,7 @@ do
                 echo -e "  To extract, clean your extracted firmwares directory or run this cmd with \"--force\"\n"
                 continue
             fi
-        elif [[ "$(GET_LATEST_FIRMWARE)" != "$(cat "$FW_DIR/${MODEL}_${REGION}/.extracted")" ]]; then
+        elif [[ "$LATEST_VERSION" != "$(cat "$FW_DIR/${MODEL}_${REGION}/.extracted")" ]]; then
             echo    "- $MODEL firmware with $REGION CSC is already extracted."
             echo    "  A newer version of this device's firmware is available."
             echo -e "  Please download the firmware using the \"download_fw\" cmd\n"
