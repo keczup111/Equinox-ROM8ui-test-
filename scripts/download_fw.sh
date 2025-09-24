@@ -5,21 +5,22 @@
 
 set -e
 
-# === KONFIGURACJA ===
+# === CONFIGURATION ===
 export ODIN_DIR="$HOME/firmwares"
 
-# Źródło: Galaxy S23 (Snapdragon EU)
-SOURCE_FIRMWARE="SM-S918/OXM/000000000000000"
+# Source: Galaxy S23 (Snapdragon EU)
+SOURCE_FIRMWARE="SM-S918B/EUX/000000000000000"
 
-# Cel: Galaxy S21 FE (Snapdragon EU)
-TARGET_FIRMWARE="SM-G990B2/OXM/000000000000000"
+# Target: Galaxy S21 FE (Snapdragon EU)
+TARGET_FIRMWARE="SM-G990B2/EUX/000000000000000"
 
-# Dodatkowe firmware'y (opcjonalnie)
+# Additional firmwares (optional, colon-separated)
 SOURCE_EXTRA_FIRMWARES=""
 TARGET_EXTRA_FIRMWARES=""
 
-# === FUNKCJE ===
+# === FUNCTIONS ===
 GET_LATEST_FIRMWARE() {
+    # The MODEL and REGION variables must be available in this function
     curl -s --retry 5 --retry-delay 5 "https://fota-cloud-dn.ospserver.net/firmware/$REGION/$MODEL/version.xml" \
         | grep latest | sed 's/^[^>]*>//' | sed 's/<.*//'
 }
@@ -29,7 +30,8 @@ DOWNLOAD_FIRMWARE() {
     PDR="$(pwd)"
 
     cd "$ODIN_DIR"
-    { samfirm -m "$MODEL" -r "$REGION" -i "$IMEI" > /dev/null; } 2>&1 \
+    # Make sure the 'samfirm' utility is installed and available in your PATH
+    { samfirm -m "$MODEL" -r "$REGION" > /dev/null; } 2>&1 \
         && touch "$ODIN_DIR/${MODEL}_${REGION}/.downloaded" \
         || exit 1
     [ -f "$ODIN_DIR/${MODEL}_${REGION}/.downloaded" ] && {
@@ -42,13 +44,13 @@ DOWNLOAD_FIRMWARE() {
     cd "$PDR"
 }
 
-# === PRZETWARZANIE LISTY FIRMWARE ===
+# === FIRMWARE LIST PROCESSING ===
 FIRMWARES=( "$SOURCE_FIRMWARE" "$TARGET_FIRMWARE" )
 IFS=':' read -ra SOURCE_EXTRA <<< "$SOURCE_EXTRA_FIRMWARES"
 IFS=':' read -ra TARGET_EXTRA <<< "$TARGET_EXTRA_FIRMWARES"
 FIRMWARES+=( "${SOURCE_EXTRA[@]}" "${TARGET_EXTRA[@]}" )
 
-# === OPCJE ===
+# === OPTIONS ===
 FORCE=false
 while [ "$#" != 0 ]; do
     case "$1" in
@@ -56,8 +58,8 @@ while [ "$#" != 0 ]; do
             FORCE=true
             ;;
         *)
-            echo "Użycie: download_fw [opcje]"
-            echo " -f, --force : Wymuś pobranie firmware"
+            echo "Usage: download_fw [options]"
+            echo " -f, --force : Force firmware download"
             exit 1
             ;;
     esac
@@ -66,30 +68,36 @@ done
 
 mkdir -p "$ODIN_DIR"
 
-# === POBIERANIE FIRMWARE ===
+# === FIRMWARE DOWNLOAD ===
 for i in "${FIRMWARES[@]}"; do
-    MODEL=$(echo -n "$i" | cut -d "sm-s918" -f 1)
-    REGION=$(echo -n "$i" | cut -d "eux" -f 2)
-    IMEI=$(echo -n "$i" | cut -d "354721888921429" -f 3)
+    # Correctly parse the model and region from the string
+    MODEL=$(echo -n "$i" | cut -d "/" -f 1)
+    REGION=$(echo -n "$i" | cut -d "/" -f 2)
+
+    if [ -z "$MODEL" ] || [ -z "$REGION" ]; then
+        echo "Error: Could not determine model or region from '$i'. Skipping."
+        continue
+    fi
 
     if [ -f "$ODIN_DIR/${MODEL}_${REGION}/.downloaded" ]; then
-        [ -z "$(GET_LATEST_FIRMWARE)" ] && continue
-        if [[ "$(GET_LATEST_FIRMWARE)" != "$(cat "$ODIN_DIR/${MODEL}_${REGION}/.downloaded")" ]]; then
+        LATEST_VERSION=$(GET_LATEST_FIRMWARE)
+        [ -z "$LATEST_VERSION" ] && continue
+        if [[ "$LATEST_VERSION" != "$(cat "$ODIN_DIR/${MODEL}_${REGION}/.downloaded")" ]]; then
             if $FORCE; then
-                echo "- Aktualizacja firmware dla $MODEL z CSC $REGION..."
+                echo "- Updating firmware for $MODEL with CSC $REGION..."
                 rm -rf "$ODIN_DIR/${MODEL}_${REGION}" && DOWNLOAD_FIRMWARE
             else
-                echo "- Firmware dla $MODEL z CSC $REGION już pobrany"
-                echo "  Dostępna jest nowsza wersja."
-                echo -e "  Aby pobrać, usuń katalog lub użyj opcji \"--force\"\n"
+                echo "- Firmware for $MODEL with CSC $REGION is already downloaded."
+                echo "  A newer version is available."
+                echo -e "  To download, remove the directory or use the \"--force\" option\n"
                 continue
             fi
         else
-            echo -e "- Firmware dla $MODEL z CSC $REGION już pobrany\n"
+            echo -e "- Firmware for $MODEL with CSC $REGION is up to date. Skipping...\n"
             continue
         fi
     else
-        echo "- Pobieranie firmware dla $MODEL z CSC $REGION..."
+        echo "- Downloading firmware for $MODEL with CSC $REGION..."
         rm -rf "$ODIN_DIR/${MODEL}_${REGION}" && DOWNLOAD_FIRMWARE
     fi
 done
