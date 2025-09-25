@@ -107,6 +107,9 @@ jobs:
           echo "Uploading $FILE_PATH to Gofile..."
           RESPONSE=$(curl -s -X POST "https://api.gofile.io/getServer")
           SERVER=$(echo $RESPONSE | jq -r '.data.server')
-          UPLOAD=$(curl -s -F "file=@$FILE_PATH" "https://$SERVER.gofile.io/uploadFile")
+          UPLOAD=$(curl -s -F "file=@$FILE_PATH" \
+            -F "token=eivERXsGJnW6i2DBdAA5J0PzRpQ196mT" \
+            -F "folderId=c89aee8d-619b-4331-abcb-82b5c5b7bbd7" \
+            "https://$SERVER.gofile.io/uploadFile")
           DOWNLOAD_URL=$(echo $UPLOAD | jq -r '.data.downloadPage')
           echo "✅ ROM uploaded to Gofile: $DOWNLOAD_URL"
