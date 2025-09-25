@@ -1,13 +1,17 @@
 name: Build EquinoXROM
+
 on:
   workflow_dispatch:
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+
     strategy:
       fail-fast: false
       matrix:
-        target: [r9q2]
+        target: [r9q ,r9q2]
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -95,21 +99,15 @@ jobs:
           source ./buildenv.sh ${{ matrix.target }}
           ./scripts/make_rom.sh --force
 
-      - name: Upload ROM as artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: EquinoX-ROM-${{ matrix.target }}
-          path: out/target/product/${{ matrix.target }}/*.zip
-
-      - name: Upload ROM to Gofile
+      - name: Upload to GoFile
         run: |
-          FILE_PATH=$(ls out/target/product/${{ matrix.target }}/*.zip | head -n 1)
-          echo "Uploading $FILE_PATH to Gofile..."
-          RESPONSE=$(curl -s -X POST "https://api.gofile.io/getServer")
-          SERVER=$(echo $RESPONSE | jq -r '.data.server')
-          UPLOAD=$(curl -s -F "file=@$FILE_PATH" \
-            -F "token=eivERXsGJnW6i2DBdAA5J0PzRpQ196mT" \
-            -F "folderId=c89aee8d-619b-4331-abcb-82b5c5b7bbd7" \
-            "https://$SERVER.gofile.io/uploadFile")
-          DOWNLOAD_URL=$(echo $UPLOAD | jq -r '.data.downloadPage')
-          echo "✅ ROM uploaded to Gofile: $DOWNLOAD_URL"
+          ZIP_FILE=$(find out -maxdepth 1 -type f -name "*.zip" | head -n 1)
+          RESPONSE=$(curl -s -F "file=@$ZIP_FILE" -F "token=${{ eivERXsGJnW6i2DBdAA5J0PzRpQ196mT }}" -F "folderId=${{ c89aee8d-619b-4331-abcb-82b5c5b7bbd7 }}" "https://upload-eu-par.gofile.io/uploadFile")
+          echo "Download link:"
+          echo "$RESPONSE" | jq -r '.data.downloadPage'
+
+          echo "MD5:"
+          md5sum "$ZIP_FILE"
+
+          echo "SHA256:"
+          sha256sum "$ZIP_FILE"
