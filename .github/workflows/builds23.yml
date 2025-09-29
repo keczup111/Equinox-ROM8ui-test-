@@ -1,4 +1,3 @@
-
 name: Build EquinoXROM
 
 on:
@@ -6,12 +5,12 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-24.04 # Możesz rozważyć ubuntu-latest-8-core lub inny Larger Runner jeśli to nadal za mało
 
     strategy:
       fail-fast: false
       matrix:
-        target: [r9q ,r9q2]
+        target: [r9q, r9q2] # Upewnij się, że 'r9q' to prawidłowy cel, w Twoim logu było r9q2
 
     steps:
       - name: Checkout repo
@@ -19,38 +18,77 @@ jobs:
         with:
           submodules: 'recursive'
 
-      - name: Free up space
+      - name: Diagnostyka zasobów (Początek)
         run: |
-          sudo apt-get remove -y '^aspnetcore-.*' || echo "::warning::The command [sudo apt-get remove -y '^aspnetcore-.*'] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y '^dotnet-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^dotnet-.*' --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y 'php.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y 'php.*' --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y '^mongodb-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^mongodb-.*' --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y '^mysql-.*' --fix-missing || echo "::warning::The command [sudo apt-get remove -y '^mysql-.*' --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell libgl1-mesa-dri --fix-missing || echo "::warning::The command [sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell libgl1-mesa-dri --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y google-cloud-sdk --fix-missing || echo "::debug::The command [sudo apt-get remove -y google-cloud-sdk --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get remove -y google-cloud-cli --fix-missing || echo "::debug::The command [sudo apt-get remove -y google-cloud-cli --fix-missing] failed to complete successfully. Proceeding..."
-          sudo apt-get autoremove -y || echo "::warning::The command [sudo apt-get autoremove -y] failed to complete successfully. Proceeding..."
-          sudo apt-get clean || echo "::warning::The command [sudo apt-get clean] failed to complete successfully. Proceeding..."
+          echo "--- Zasoby na początku pracy ---"
+          echo "Dostępne miejsce na dysku:"
+          df -h /
+          echo "Dostępna pamięć RAM:"
+          free -h
 
-      - name: Free disk space (2/3)
+      - name: Free up space (1/4 - Usuwanie zbędnych pakietów)
+        run: |
+          echo "Rozpoczynam usuwanie preinstalowanych pakietów..."
+          # Usunięcie środowisk uruchomieniowych
+          sudo apt-get remove -y '^aspnetcore-.*' || echo "::warning::Usuwanie aspnetcore nie powiodło się."
+          sudo apt-get remove -y '^dotnet-.*' --fix-missing || echo "::warning::Usuwanie dotnet nie powiodło się."
+          sudo apt-get remove -y 'php.*' --fix-missing || echo "::warning::Usuwanie php nie powiodło się."
+          # Usunięcie baz danych
+          sudo apt-get remove -y '^mongodb-.*' --fix-missing || echo "::warning::Usuwanie mongodb nie powiodło się."
+          sudo apt-get remove -y '^mysql-.*' --fix-missing || echo "::warning::Usuwanie mysql nie powiodło się."
+          # Usunięcie GUI/Przeglądarek/SDK
+          sudo apt-get remove -y azure-cli google-chrome-stable firefox powershell libgl1-mesa-dri --fix-missing || echo "::warning::Usuwanie azure-cli, przeglądarek itp. nie powiodło się."
+          sudo apt-get remove -y google-cloud-sdk google-cloud-cli --fix-missing || echo "::warning::Usuwanie Google Cloud SDK/CLI nie powiodło się."
+          # Generalne czyszczenie i autousuwanie
+          sudo apt-get autoremove -y || echo "::warning::apt-get autoremove nie powiodło się."
+          sudo apt-get clean || echo "::warning::apt-get clean nie powiodło się."
+          echo "--- Dostępne miejsce po czyszczeniu pakietów ---"
+          df -h /
+
+      - name: Free up space (2/4 - Usuwanie z cache narzędzi w AGENT_TOOLSDIRECTORY)
+        run: |
+          echo "Agresywne usuwanie katalogu narzędzi: $AGENT_TOOLSDIRECTORY"
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || echo "::error::Krytyczny błąd: Nie udało się usunąć $AGENT_TOOLSDIRECTORY, co może spowodować brak miejsca."
+          echo "--- Dostępne miejsce po usunięciu AGENT_TOOLSDIRECTORY ---"
+          df -h /
+
+      - name: Free disk space (3/4 - Użycie jlumbroso/free-disk-space)
         uses: jlumbroso/free-disk-space@main
         with:
-          tool-cache: true
+          tool-cache: true # Usuwa cache narzędzi, ale już to zrobiliśmy ręcznie dla pewności
+        # Dodatkowo, jlumbroso ma opcje 'docker-images: true' i 'android: true',
+        # które mogą być przydatne, jeśli nadal masz problemy.
+        # with:
+        #   tool-cache: true
+        #   docker-images: true
+        #   android: true
 
-      - name: Free disk space (3/3)
+      - name: Free disk space (4/4 - Użycie rokibhasansagar/slimhub_actions)
         uses: rokibhasansagar/slimhub_actions@main
         with:
-          retain: 'compiler_cmake'
+          retain: 'compiler_cmake' # Zachowuje narzędzia do kompilacji i cmake
+        # Możesz dostosować 'retain' lub dodać 'remove-docker-images: true' jeśli potrzebujesz więcej miejsca
+
+      - name: Diagnostyka zasobów (Po czyszczeniu)
+        run: |
+          echo "--- Zasoby po CZYSZCZENIU ---"
+          echo "Dostępne miejsce na dysku:"
+          df -h /
+          echo "Dostępna pamięć RAM:"
+          free -h
 
       - name: Set up build environment
         run: |
-          sudo apt update
+          echo "Aktualizuję pakiety i instaluję zależności..."
+          sudo apt update -y
           DEBIAN_FRONTEND=noninteractive sudo apt install -yq \
             jq attr ccache clang ffmpeg golang \
             libbrotli-dev libgtest-dev libprotobuf-dev libunwind-dev libpcre2-dev \
             libzstd-dev linux-modules-extra-$(uname -r) lld protobuf-compiler webp \
             curl xxd patchelf flex bison libarchive-tools build-essential
-          sudo modprobe erofs f2fs
+          echo "Ładuję moduły jądra..."
+          sudo modprobe erofs f2fs || echo "::warning::Nie udało się załadować modułów jądra erofs/f2fs. Sprawdź, czy są potrzebne."
+          echo "Konfiguruję Git..."
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
@@ -67,49 +105,92 @@ jobs:
           node-version: 'latest'
 
       - name: Build dependencies
-        run: source ./buildenv.sh ${{ matrix.target }}
+        run: |
+          echo "Budowanie zależności (pierwsze uruchomienie buildenv.sh)..."
+          source ./buildenv.sh ${{ matrix.target }}
 
       - name: Download source firmware
         run: |
+          echo "Pobieranie firmware źródłowego..."
           source ./buildenv.sh ${{ matrix.target }}
           TARGET_FIRMWARE="$SOURCE_FIRMWARE" ./scripts/download_fw.sh --force
 
       - name: Extract source firmware
         run: |
+          echo "Rozpakowywanie firmware źródłowego..."
           source ./buildenv.sh ${{ matrix.target }}
           TARGET_FIRMWARE="$SOURCE_FIRMWARE" ./scripts/extract_fw.sh --force
 
       - name: Download target firmware
         run: |
+          echo "Pobieranie firmware docelowego..."
           source ./buildenv.sh ${{ matrix.target }}
           SOURCE_FIRMWARE="$TARGET_FIRMWARE" ./scripts/download_fw.sh --force
 
       - name: Extract target firmware
         run: |
+          echo "Rozpakowywanie firmware docelowego..."
           source ./buildenv.sh ${{ matrix.target }}
           SOURCE_FIRMWARE="$TARGET_FIRMWARE" ./scripts/extract_fw.sh --force
 
-      - name: Cleanup out/odin and leave placeholder
+      - name: Cleanup out/odin and leave placeholder (Opcjonalne, w zależności od potrzeb skryptu)
         run: |
-          rm -rf out/odin/SM-S938B_EUX
+          echo "Czyszczenie out/odin i tworzenie placeholderów..."
+          rm -rf out/odin/SM-S938B_EUX || echo "::warning::Nie udało się usunąć out/odin/SM-S938B_EUX."
           mkdir -p out/odin/SM-S938B_EUX
           touch out/odin/SM-S938B_EUX/.downloaded
+          echo "--- Dostępne miejsce po pobieraniu i rozpakowywaniu firmware ---"
+          df -h /
+
+
+      - name: Sprawdzenie Zasobów PRZED budowaniem ROM # <--- TEN KROK JEST KLUCZOWY DO DIAGNOSTYKI
+        run: |
+          echo "--- SPRAWDZENIE ZASOBÓW PRZED KLUCZOWYM ETAPEM BUDOWANIA ROM ---"
+          echo "Dostępne miejsce na dysku (df -h /):"
+          df -h /
+          echo "Dostępna pamięć RAM (free -h):"
+          free -h
+          echo "---------------------------------------------------------------"
+
 
       - name: Build ROM
         run: |
+          echo "Rozpoczynam budowanie właściwego ROM-u..."
           source ./buildenv.sh ${{ matrix.target }}
           ./scripts/make_rom.sh --force
+          echo "--- Dostępne miejsce po zakończeniu budowania ROM ---" # Dodatkowa diagnostyka
+          df -h /
 
       - name: Upload to GoFile
+        if: success() # Tylko jeśli budowanie ROM-u się powiodło
         run: |
+          echo "Wyszukiwanie pliku ZIP ROM-u..."
           ZIP_FILE=$(find out -maxdepth 1 -type f -name "*.zip" | head -n 1)
-          RESPONSE=$(curl -s -F "file=@$ZIP_FILE" -F "eivERXsGJnW6i2DBdAA5J0PzRpQ196mT" -F "c89aee8d-619b-4331-abcb-82b5c5b7bbd7" "https://upload-eu-par.gofile.io/uploadFile")
-          echo "Download link:"
-          echo "$RESPONSE" | jq -r '.data.downloadPage'
+          if [ -z "$ZIP_FILE" ]; then
+            echo "::error::Nie znaleziono pliku ZIP ROM-u w katalogu 'out'."
+            exit 1
+          fi
+          echo "Znaleziono plik: $ZIP_FILE. Rozpoczynam upload do GoFile..."
+          # Zastąp 'eivERXsGJnW6i2DBdAA5J0PzRpQ196mT' i 'c89aee8d-619b-4331-abcb-82b5c5b7bbd7'
+          # swoimi rzeczywistymi danymi do uwierzytelnienia w GoFile lub zmiennymi środowiskowymi.
+          RESPONSE=$(curl -s -F "file=@$ZIP_FILE" -F "token=YOUR_GOFILE_TOKEN" -F "folderId=YOUR_GOFILE_FOLDER_ID" "https://upload-eu-par.gofile.io/uploadFile")
+          
+          # Sprawdzenie, czy upload się powiódł
+          STATUS=$(echo "$RESPONSE" | jq -r '.status')
+          if [ "$STATUS" == "ok" ]; then
+            DOWNLOAD_PAGE=$(echo "$RESPONSE" | jq -r '.data.downloadPage')
+            echo "### Upload ZAKOŃCZONY POMYŚLNIE ###"
+            echo "Link do pobrania: $DOWNLOAD_PAGE"
+            echo "::notice::ROM dostępny pod linkiem: $DOWNLOAD_PAGE"
+          else
+            ERROR_MSG=$(echo "$RESPONSE" | jq -r '.errorDescription // .error')
+            echo "::error::Upload do GoFile NIE POWIÓDŁ SIĘ: $ERROR_MSG"
+            echo "Pełna odpowiedź GoFile: $RESPONSE"
+            exit 1
+          fi
 
           echo "MD5:"
           md5sum "$ZIP_FILE"
 
           echo "SHA256:"
           sha256sum "$ZIP_FILE"
-
